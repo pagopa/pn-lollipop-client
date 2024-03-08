@@ -16,7 +16,7 @@
 
 	<properties>
 		<jacoco.min.line.cover.ratio>0.00</jacoco.min.line.cover.ratio>
-		<pn.commons.version>2.2.9-SNAPSHOT</pn.commons.version>
+		<pn.commons.version>2.3.0-SNAPSHOT</pn.commons.version>
 	</properties>
 
 	<dependencies>
