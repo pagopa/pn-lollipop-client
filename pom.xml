@@ -11,7 +11,7 @@
 
 	<artifactId>pn-lollipop-client</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
-	<name>pn-commons</name>
+	<name>pn-lollipop-client</name>
 	<description>Pn Lollipop Client</description>
 
 	<properties>
