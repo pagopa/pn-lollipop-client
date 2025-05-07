@@ -1,8 +1,8 @@
 package it.pagopa.pn.lollipop.client.filter.config;
 
-import it.pagopa.pn.commons.configs.lollipop.PNHttpVerifierConfiguration;
-import it.pagopa.pn.commons.configs.lollipop.SpringLollipopConsumerRequestConfig;
-import it.pagopa.pn.commons.lollipop.LollipopWebFilter;
+import it.pagopa.pn.lollipop.client.config.PNHttpVerifierConfiguration;
+import it.pagopa.pn.lollipop.client.config.SpringLollipopConsumerRequestConfig;
+import it.pagopa.pn.lollipop.client.filter.LollipopWebFilter;
 import it.pagopa.tech.lollipop.consumer.assertion.AssertionServiceFactory;
 import it.pagopa.tech.lollipop.consumer.assertion.client.simple.AssertionSimpleClientConfig;
 import it.pagopa.tech.lollipop.consumer.assertion.storage.StorageConfig;

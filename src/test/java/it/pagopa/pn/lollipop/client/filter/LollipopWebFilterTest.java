@@ -1,7 +1,6 @@
 package it.pagopa.pn.lollipop.client.filter;
 
 
-import it.pagopa.pn.commons.lollipop.LollipopWebFilter;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommand;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommandBuilder;
 import it.pagopa.tech.lollipop.consumer.model.CommandResult;
@@ -36,7 +35,7 @@ class LollipopWebFilterTest {
     @Mock
     private LollipopConsumerCommand command;
 
-    private it.pagopa.pn.commons.lollipop.LollipopWebFilter webFilter;
+    private LollipopWebFilter webFilter;
 
     private static final String HEADER_FIELD = "x-pagopa-pn-src-ch";
     private static final String HEADER_VALUE = "IO";
