@@ -25,11 +25,13 @@ import it.pagopa.tech.lollipop.consumer.logger.impl.LollipopLogbackLoggerService
 import it.pagopa.tech.lollipop.consumer.service.LollipopConsumerRequestValidationService;
 import it.pagopa.tech.lollipop.consumer.service.impl.LollipopConsumerRequestValidationServiceImpl;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 /**
  * Instance of Spring configuration of the core elements, the implementations of the related
  * services are delegated to external configurations
  */
+@Import({LollipopProperties.class})
 public class PNHttpVerifierConfiguration {
 
     @Bean
