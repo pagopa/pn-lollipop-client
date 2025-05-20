@@ -10,7 +10,7 @@
 	</parent>
 
 	<artifactId>pn-lollipop-client</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<name>pn-lollipop-client</name>
 	<description>Pn Lollipop Client</description>
 
