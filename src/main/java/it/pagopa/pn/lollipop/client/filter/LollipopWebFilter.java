@@ -108,7 +108,25 @@ public class LollipopWebFilter implements OrderedWebFilter {
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
             return Mono.from( exchange.getResponse().writeWith(Flux.just(buffer)) );
         }
-        return Mono.just("Ok");
+        // nuovi header
+        String name = commandResult.getName();
+        String familyName = commandResult.getFamilyName();
+        if(name==null || name.isEmpty() || familyName==null || familyName.isEmpty()){
+            log.warn("Lollipop header name or familyName is null or empty");
+        }
+
+        ServerHttpRequest mutatedRequest = exchange.getRequest()
+                .mutate()
+                .header("x-pagopa-lollipop-user-name", name)
+                .header("x-pagopa-lollipop-user-family-name", familyName)
+                .build();
+
+        ServerWebExchange mutatedExchange = exchange.mutate()
+                .request(mutatedRequest)
+                .build();
+
+        // exchange aggiornato
+        return Mono.just(mutatedExchange);
     }
 
     private byte[] getProblemJsonInBytes(String resultCode) {
