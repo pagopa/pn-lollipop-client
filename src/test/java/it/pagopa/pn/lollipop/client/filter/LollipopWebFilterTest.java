@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
@@ -38,7 +39,11 @@ class LollipopWebFilterTest {
     private LollipopWebFilter webFilter;
 
     private static final String HEADER_FIELD = "x-pagopa-pn-src-ch";
+    private static final String HEADER_FIELD_NAME = "x-pagopa-lollipop-user-name";
+    private static final String HEADER_FIELD_FAMILY_NAME = "x-pagopa-lollipop-user-family-name";
     private static final String HEADER_VALUE = "IO";
+    private static final String HEADER_VALUE_FAMILY_NAME = "Rossi";
+    private static final String HEADER_VALUE_NAME = "Paolo";
 
     @BeforeEach
     void setup() {
@@ -99,6 +104,35 @@ class LollipopWebFilterTest {
     }
 
     @Test
+    void testFilterWithValidPostRequestWithNameAndFamilyName() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_FIELD_NAME, HEADER_VALUE_NAME)
+                .header(HEADER_FIELD_FAMILY_NAME, HEADER_VALUE_FAMILY_NAME)
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        WebHandler webHandler = serverWebExchange -> {
+            Assertions.assertEquals("IO", HEADER_VALUE);
+            return Mono.empty();
+        };
+
+        CommandResult commandResult =
+                new CommandResult(VERIFICATION_SUCCESS_CODE, "request validation success", "Paolo", "Rossi");
+
+        Mockito.when(commandBuilder.createCommand(Mockito.any(LollipopConsumerRequest.class))).thenReturn(command);
+
+        Mockito.when(command.doExecute()).thenReturn( commandResult );
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        assertDoesNotThrow( () -> {
+            webFilter.filter(exchange, filterChain).block();
+        });
+
+    }
+
+    @Test
     void testFilterWithoutIOHeaderRequest() {
         MockServerHttpRequest request = MockServerHttpRequest.get("http://localhost").build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
@@ -142,6 +176,64 @@ class LollipopWebFilterTest {
 
         Assertions.assertNotNull( exchange.getResponse().getStatusCode() );
         Assertions.assertEquals( 404, exchange.getResponse().getStatusCode().value() );
+
+    }
+
+    @Test
+    void testFilterWithEmptyNameFamilyNameShouldLogWarning() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_FIELD_NAME, "")
+                .header(HEADER_FIELD_FAMILY_NAME, "")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        WebHandler webHandler = serverWebExchange -> {
+            Assertions.assertEquals("IO", HEADER_VALUE);
+            return Mono.empty();
+        };
+
+        CommandResult commandResult =
+                new CommandResult(VERIFICATION_SUCCESS_CODE, "request validation success","","");
+
+        Mockito.when(commandBuilder.createCommand(Mockito.any(LollipopConsumerRequest.class))).thenReturn(command);
+
+        Mockito.when(command.doExecute()).thenReturn( commandResult );
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        assertDoesNotThrow( () -> {
+            webFilter.filter(exchange, filterChain).block();
+        });
+
+    }
+
+    @Test
+    void testFilterWithNullNameFamilyNameShouldLogWarning() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_FIELD_NAME, "")
+                .header(HEADER_FIELD_FAMILY_NAME, "")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        WebHandler webHandler = serverWebExchange -> {
+            Assertions.assertEquals("IO", HEADER_VALUE);
+            return Mono.empty();
+        };
+
+        CommandResult commandResult =
+                new CommandResult(VERIFICATION_SUCCESS_CODE, "request validation success");
+
+        Mockito.when(commandBuilder.createCommand(Mockito.any(LollipopConsumerRequest.class))).thenReturn(command);
+
+        Mockito.when(command.doExecute()).thenReturn( commandResult );
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        assertDoesNotThrow( () -> {
+            webFilter.filter(exchange, filterChain).block();
+        });
 
     }
 }
