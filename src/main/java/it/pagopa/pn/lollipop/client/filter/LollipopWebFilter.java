@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.pagopa.pn.common.rest.error.v1.dto.Problem;
+import it.pagopa.pn.common.rest.error.v1.dto.ProblemError;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommand;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommandBuilder;
 import it.pagopa.tech.lollipop.consumer.model.CommandResult;
@@ -30,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -103,7 +105,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             exchange.getResponse().setStatusCode( HttpStatus.NOT_FOUND );
             // Non voglio restituire l'errore al client ma lo loggo a livello warning
             log.warn("Lollipop auth response={}, detail={}", commandResult.getResultCode(), commandResult.getResultMessage());
-            byte[] problemJsonBytes = getProblemJsonInBytes(commandResult.getResultCode());
+            byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
             return Mono.from( exchange.getResponse().writeWith(Flux.just(buffer)) );
@@ -111,12 +113,18 @@ public class LollipopWebFilter implements OrderedWebFilter {
         return Mono.just("Ok");
     }
 
-    private byte[] getProblemJsonInBytes(String resultCode) {
+    private byte[] getProblemJsonInBytes(CommandResult commandResult) {
+        ProblemError problemError = new ProblemError()
+                .code(commandResult.getResultCode())
+                .detail(commandResult.getResultMessage());
+
         Problem problem = new Problem()
                 .timestamp(Instant.now().atOffset(ZoneOffset.UTC))
-                .detail(resultCode)
+                .detail(commandResult.getResultCode())
                 .traceId(MDC.get(MDC_TRACE_ID_KEY))
-                .title(ERROR_CODE_LOLLIPOP_AUTH);
+                .title(ERROR_CODE_LOLLIPOP_AUTH)
+                .status(HttpStatus.BAD_REQUEST.value())
+                .errors(List.of(problemError));
         try {
             return objectMapper.writeValueAsBytes(problem);
         }
