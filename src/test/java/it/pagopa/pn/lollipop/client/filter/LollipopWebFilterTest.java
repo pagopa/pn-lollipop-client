@@ -44,10 +44,14 @@ class LollipopWebFilterTest {
     private static final String HEADER_VALUE = "IO";
     private static final String HEADER_VALUE_FAMILY_NAME = "Rossi";
     private static final String HEADER_VALUE_NAME = "Paolo";
+    private static final String HEADER_USER_ID = "x-pagopa-lollipop-user-id";
+    private static final String HEADER_USER_ID_VALUE = "fe09520f-fa96-43ad-96b5-d46924c21b73";
+
 
     @BeforeEach
     void setup() {
-        webFilter = new LollipopWebFilter(commandBuilder);
+        String whiteListConfig = "fe09520f-fa96-43ad-96b5-d46924c21b73:Mario:Rossi;Ge09520x-fa96-43ad-96b5-d46924c21b44:Carlo:Verdi";
+        webFilter = new LollipopWebFilter(commandBuilder, whiteListConfig);
     }
 
     @Test
@@ -74,6 +78,50 @@ class LollipopWebFilterTest {
         assertDoesNotThrow( () -> {
             webFilter.filter(exchange, filterChain).block();
         });
+
+    }
+
+    @Test
+    void testFilterWithValidRequestWithLollipopHeaderPresent() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_USER_ID,HEADER_USER_ID_VALUE)
+                .header(LOLLIPOP_ASSERTION_TYPE, "SAML").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        WebHandler webHandler = serverWebExchange -> {
+            Assertions.assertEquals(HEADER_VALUE, serverWebExchange.getRequest().getHeaders().getFirst(HEADER_FIELD));
+            return Mono.empty();
+        };
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        assertDoesNotThrow(() -> webFilter.filter(exchange, filterChain).block());
+
+    }
+
+    @Test
+    void testFilterWithValidRequestWithLollipopHeaderNotPresent() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_USER_ID, "user-id-not-in-whitelist")
+                .header(LOLLIPOP_ASSERTION_TYPE, "SAML").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        WebHandler webHandler = serverWebExchange -> {
+            Assertions.assertEquals(HEADER_VALUE, serverWebExchange.getRequest().getHeaders().getFirst(HEADER_FIELD));
+            return Mono.empty();
+        };
+        CommandResult commandResult =
+                new CommandResult(VERIFICATION_SUCCESS_CODE, "request validation success");
+
+        Mockito.when(commandBuilder.createCommand(Mockito.any(LollipopConsumerRequest.class))).thenReturn(command);
+
+        Mockito.when(command.doExecute()).thenReturn( commandResult );
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        assertDoesNotThrow(() -> webFilter.filter(exchange, filterChain).block());
 
     }
 

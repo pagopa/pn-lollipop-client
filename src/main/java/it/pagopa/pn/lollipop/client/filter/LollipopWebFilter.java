@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.pagopa.pn.common.rest.error.v1.dto.Problem;
+import it.pagopa.pn.lollipop.client.config.FakeUser;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommand;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommandBuilder;
 import it.pagopa.tech.lollipop.consumer.model.CommandResult;
@@ -41,16 +42,21 @@ import static it.pagopa.tech.lollipop.consumer.command.impl.LollipopConsumerComm
 public class LollipopWebFilter implements OrderedWebFilter {
     private final LollipopConsumerCommandBuilder consumerCommandBuilder;
     private final ObjectMapper objectMapper;
+    private final Map<String, FakeUser> whiteList;
     private static final String HEADER_FIELD = "x-pagopa-pn-src-ch";
     private static final String HEADER_VALUE = "IO";
+    private static final String HEADER_USER_ID = "x-pagopa-lollipop-user-id";
 
-    public LollipopWebFilter(LollipopConsumerCommandBuilder consumerCommandBuilder) {
+
+    public LollipopWebFilter(LollipopConsumerCommandBuilder consumerCommandBuilder, String whiteListConfig) {
         this.consumerCommandBuilder = consumerCommandBuilder;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule( new JavaTimeModule() );
         this.objectMapper.setSerializationInclusion( JsonInclude.Include.NON_NULL );
         this.objectMapper.configure( SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false );
+        this.whiteList = parseWhiteList(whiteListConfig);
     }
+
     @Override
     public @NotNull Mono<Void> filter(@NotNull ServerWebExchange exchange, @NotNull WebFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -61,7 +67,25 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
             log.debug("Before Lollipop filter");
             HttpMethod method = request.getMethod();
+            //controllo lollipop-user-id-header: se è presente nella lista settiamo dei valori fittizi al name e familyName e non viene fatta alcuna validazione
+            String userId = headers.getFirst(HEADER_USER_ID);
+            if(userId != null && whiteList.containsKey(userId)){
+                log.info("userId is not null {}",userId);
+                log.info("whiteListe {}",whiteList);
+                FakeUser fakeUser = whiteList.get(userId);
+                log.debug("White list user detected: {}", userId);
 
+                ServerHttpRequest mutatedRequest = request.mutate()
+                        .header("x-pagopa-lollipop-user-name", fakeUser.name())
+                        .header("x-pagopa-lollipop-user-family-name", fakeUser.familyName())
+                        .build();
+
+                ServerWebExchange mutatedExchange = exchange.mutate()
+                        .request(mutatedRequest)
+                        .build();
+
+                return chain.filter(mutatedExchange);
+            }
             // Get request body as String
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
                 return request.getBody()
@@ -147,5 +171,21 @@ public class LollipopWebFilter implements OrderedWebFilter {
     @Override
     public int getOrder() {
         return 1;
+    }
+
+
+    private Map<String, FakeUser> parseWhiteList(String config) {
+        Map<String, FakeUser> map = new HashMap<>();
+        if (config != null && !config.isBlank()) {
+            for (String entry : config.split(";")) {
+                String[] parts = entry.split(":");
+                if (parts.length == 3) {
+                    map.put(parts[0], new FakeUser(parts[1], parts[2]));
+                } else {
+                    log.warn("Invalid whiteList entry: {}", entry);
+                }
+            }
+        }
+        return map;
     }
 }
