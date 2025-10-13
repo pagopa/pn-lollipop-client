@@ -150,7 +150,7 @@ class LollipopWebFilterTest {
         });
 
         Assertions.assertNotNull( exchange.getResponse().getStatusCode() );
-        Assertions.assertEquals( 404, exchange.getResponse().getStatusCode().value() );
+        Assertions.assertEquals( 400, exchange.getResponse().getStatusCode().value() );
 
     }
 
@@ -176,7 +176,7 @@ class LollipopWebFilterTest {
 
         MockServerHttpResponse response = exchange.getResponse();
 
-        Assertions.assertEquals(404, response.getStatusCode().value());
+        Assertions.assertEquals(400, response.getStatusCode().value());
         Assertions.assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
 
         String problemJson = response.getBodyAsString().block();
