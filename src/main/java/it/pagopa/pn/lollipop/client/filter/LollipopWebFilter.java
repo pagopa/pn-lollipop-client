@@ -102,7 +102,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
         CommandResult commandResult = command.doExecute();
 
         if (!commandResult.getResultCode().equals(VERIFICATION_SUCCESS_CODE)) {
-            exchange.getResponse().setStatusCode( HttpStatus.NOT_FOUND );
+            exchange.getResponse().setStatusCode( HttpStatus.BAD_REQUEST );
             // Non voglio restituire l'errore al client ma lo loggo a livello warning
             log.warn("Lollipop auth response={}, detail={}", commandResult.getResultCode(), commandResult.getResultMessage());
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
