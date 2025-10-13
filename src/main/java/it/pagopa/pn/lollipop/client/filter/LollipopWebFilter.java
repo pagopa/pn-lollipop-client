@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.MDC;
 import org.springframework.boot.web.reactive.filter.OrderedWebFilter;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -66,23 +67,30 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
             // Get request body as String
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
-                return request.getBody()
-                        .map(buffer -> buffer.toString(StandardCharsets.UTF_8))
+                return DataBufferUtils.join(request.getBody())
+                        .map(dataBuffer -> {
+                            byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                            dataBuffer.read(bytes);
+                            DataBufferUtils.release(dataBuffer);
+                            return new String(bytes, StandardCharsets.UTF_8);
+                        })
                         .defaultIfEmpty("")
-                        .flatMap(reqBody -> validateRequest(exchange, request, reqBody))
-                        .collectList()
-                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                        .flatMap(requests -> chain.filter(exchange));
+                        .flatMap(reqBody ->
+                                validateRequest(exchange, request, reqBody)
+                                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
+                                        .switchIfEmpty(chain.filter(exchange)) // <── solo se valida, continua la chain
+                        );
             } else {
                 return validateRequest(exchange, request, null)
                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                        .flatMap(stringMono -> chain.filter(exchange));
+                        .switchIfEmpty(chain.filter(exchange)); // <── idem
             }
         }
+
         return chain.filter(exchange);
     }
 
-    private Mono<Object> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
+    private Mono<Void> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
         // Get request parameters as Map<String, String[]>
         MultiValueMap<String, String> queryParams = request.getQueryParams();
         Map<String, String[]> requestParams = new HashMap<>();
@@ -108,9 +116,11 @@ public class LollipopWebFilter implements OrderedWebFilter {
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-            return Mono.from( exchange.getResponse().writeWith(Flux.just(buffer)) );
+            // Scrive il body e termina la response
+            return exchange.getResponse().writeWith(Mono.just(buffer));
         }
-        return Mono.just("Ok");
+
+        return Mono.empty();
     }
 
     private byte[] getProblemJsonInBytes(CommandResult commandResult) {
