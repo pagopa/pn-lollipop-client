@@ -38,7 +38,7 @@ public class PNHttpVerifierConfiguration {
     @Bean
     public LollipopWebFilter lollipopWebFilter(
             LollipopConsumerCommandBuilder lollipopConsumerCommandBuilder, LollipopProperties lollipopProperties) {
-        return new LollipopWebFilter(lollipopConsumerCommandBuilder, lollipopProperties.getWhitelist());
+        return new LollipopWebFilter(lollipopConsumerCommandBuilder, lollipopProperties.getWhiteList());
     }
 
     @Bean
