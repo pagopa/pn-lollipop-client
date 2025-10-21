@@ -68,23 +68,24 @@ public class LollipopWebFilter implements OrderedWebFilter {
             log.debug("Before Lollipop filter");
             HttpMethod method = request.getMethod();
             //controllo lollipop-user-id-header: se è presente nella lista settiamo dei valori fittizi al name e familyName e non viene fatta alcuna validazione
-            String userId = headers.getFirst(HEADER_USER_ID);
-            if(userId != null && whiteList.containsKey(userId)){
-                log.info("userId is not null {}",userId);
-                log.info("whiteListe {}",whiteList);
-                FakeUser fakeUser = whiteList.get(userId);
-                log.debug("White list user detected: {}", userId);
+            if(headers.containsKey(HEADER_USER_ID) && headers.getFirst(HEADER_USER_ID) != null) {
+                String userId = headers.getFirst(HEADER_USER_ID);
+                if(whiteList.containsKey(userId)) {
+                    log.info("In Lollipop filter - Lollipop userId is not null {}", userId);
+                    FakeUser fakeUser = whiteList.get(userId);
+                    log.debug("In Lollipop filter - White list user detected: {}", userId);
 
-                ServerHttpRequest mutatedRequest = request.mutate()
-                        .header("x-pagopa-lollipop-user-name", fakeUser.name())
-                        .header("x-pagopa-lollipop-user-family-name", fakeUser.familyName())
-                        .build();
+                    ServerHttpRequest mutatedRequest = request.mutate()
+                            .header("x-pagopa-lollipop-user-name", fakeUser.name())
+                            .header("x-pagopa-lollipop-user-family-name", fakeUser.familyName())
+                            .build();
 
-                ServerWebExchange mutatedExchange = exchange.mutate()
-                        .request(mutatedRequest)
-                        .build();
+                    ServerWebExchange mutatedExchange = exchange.mutate()
+                            .request(mutatedRequest)
+                            .build();
 
-                return chain.filter(mutatedExchange);
+                    return chain.filter(mutatedExchange);
+                }
             }
             // Get request body as String
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
