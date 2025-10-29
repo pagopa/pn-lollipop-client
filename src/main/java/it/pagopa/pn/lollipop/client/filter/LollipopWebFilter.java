@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.pagopa.pn.common.rest.error.v1.dto.Problem;
 import it.pagopa.pn.common.rest.error.v1.dto.ProblemError;
+import it.pagopa.pn.lollipop.client.config.FakeUser;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommand;
 import it.pagopa.tech.lollipop.consumer.command.LollipopConsumerCommandBuilder;
 import it.pagopa.tech.lollipop.consumer.model.CommandResult;
@@ -44,16 +45,21 @@ import static it.pagopa.tech.lollipop.consumer.command.impl.LollipopConsumerComm
 public class LollipopWebFilter implements OrderedWebFilter {
     private final LollipopConsumerCommandBuilder consumerCommandBuilder;
     private final ObjectMapper objectMapper;
+    private final Map<String, FakeUser> whiteList;
     private static final String HEADER_FIELD = "x-pagopa-pn-src-ch";
     private static final String HEADER_VALUE = "IO";
+    private static final String HEADER_USER_ID = "x-pagopa-lollipop-user-id";
 
-    public LollipopWebFilter(LollipopConsumerCommandBuilder consumerCommandBuilder) {
+
+    public LollipopWebFilter(LollipopConsumerCommandBuilder consumerCommandBuilder, String whiteListConfig) {
         this.consumerCommandBuilder = consumerCommandBuilder;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule( new JavaTimeModule() );
         this.objectMapper.setSerializationInclusion( JsonInclude.Include.NON_NULL );
         this.objectMapper.configure( SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false );
+        this.whiteList = parseWhiteList(whiteListConfig);
     }
+
     @Override
     public @NotNull Mono<Void> filter(@NotNull ServerWebExchange exchange, @NotNull WebFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -64,7 +70,26 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
             log.debug("Before Lollipop filter");
             HttpMethod method = request.getMethod();
+            //controllo lollipop-user-id-header: se è presente nella lista settiamo dei valori fittizi al name e familyName e non viene fatta alcuna validazione
+            if(headers.containsKey(HEADER_USER_ID) && headers.getFirst(HEADER_USER_ID) != null) {
+                String userId = headers.getFirst(HEADER_USER_ID);
+                if(whiteList.containsKey(userId)) {
+                    log.info("In Lollipop filter - Lollipop userId is not null {}", userId);
+                    FakeUser fakeUser = whiteList.get(userId);
+                    log.debug("In Lollipop filter - White list user detected: {}", userId);
 
+                    ServerHttpRequest mutatedRequest = request.mutate()
+                            .header("x-pagopa-lollipop-user-name", fakeUser.name())
+                            .header("x-pagopa-lollipop-user-family-name", fakeUser.familyName())
+                            .build();
+
+                    ServerWebExchange mutatedExchange = exchange.mutate()
+                            .request(mutatedRequest)
+                            .build();
+
+                    return chain.filter(mutatedExchange);
+                }
+            }
             // Get request body as String
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
                 return DataBufferUtils.join(request.getBody())
@@ -77,50 +102,62 @@ public class LollipopWebFilter implements OrderedWebFilter {
                         .defaultIfEmpty("")
                         .flatMap(reqBody ->
                                 validateRequest(exchange, request, reqBody)
+                                        .flatMap(chain::filter)
                                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
                                         .switchIfEmpty(chain.filter(exchange)) // <── solo se valida, continua la chain
                         );
             } else {
                 return validateRequest(exchange, request, null)
+                        .flatMap(chain::filter)
                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
                         .switchIfEmpty(chain.filter(exchange)); // <── idem
             }
         }
-
         return chain.filter(exchange);
     }
 
-    private Mono<Void> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
-        // Get request parameters as Map<String, String[]>
+    private Mono<ServerWebExchange> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
         MultiValueMap<String, String> queryParams = request.getQueryParams();
         Map<String, String[]> requestParams = new HashMap<>();
         queryParams.forEach((key, values) -> requestParams.put(key, values.toArray(new String[0])));
 
-        // Get header parameters as Map<String, String>
         Map<String, String> headerParams = request.getHeaders().toSingleValueMap();
 
-        // Create LollipopConsumerRequest object
         LollipopConsumerRequest consumerRequest = LollipopConsumerRequest.builder()
-                .requestBody( requestBody )
-                .requestParams( requestParams )
-                .headerParams( headerParams )
+                .requestBody(requestBody)
+                .requestParams(requestParams)
+                .headerParams(headerParams)
                 .build();
 
         LollipopConsumerCommand command = consumerCommandBuilder.createCommand(consumerRequest);
         CommandResult commandResult = command.doExecute();
 
         if (!commandResult.getResultCode().equals(VERIFICATION_SUCCESS_CODE)) {
-            exchange.getResponse().setStatusCode( HttpStatus.BAD_REQUEST );
-            // Non voglio restituire l'errore al client ma lo loggo a livello warning
+            exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
             log.warn("Lollipop auth response={}, detail={}", commandResult.getResultCode(), commandResult.getResultMessage());
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-            // Scrive il body e termina la response
-            return exchange.getResponse().writeWith(Mono.just(buffer));
+            return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
         }
 
-        return Mono.empty();
+        String name = commandResult.getName();
+        String familyName = commandResult.getFamilyName();
+        if (name == null || name.isEmpty() || familyName == null || familyName.isEmpty()) {
+            log.warn("Lollipop header name or familyName is null or empty");
+        }
+
+        ServerHttpRequest mutatedRequest = exchange.getRequest()
+                .mutate()
+                .header("x-pagopa-lollipop-user-name", name)
+                .header("x-pagopa-lollipop-user-family-name", familyName)
+                .build();
+
+        ServerWebExchange mutatedExchange = exchange.mutate()
+                .request(mutatedRequest)
+                .build();
+
+        return Mono.just(mutatedExchange);
     }
 
     private byte[] getProblemJsonInBytes(CommandResult commandResult) {
@@ -147,5 +184,21 @@ public class LollipopWebFilter implements OrderedWebFilter {
     @Override
     public int getOrder() {
         return 1;
+    }
+
+
+    private Map<String, FakeUser> parseWhiteList(String config) {
+        Map<String, FakeUser> map = new HashMap<>();
+        if (config != null && !config.isBlank()) {
+            for (String entry : config.split(";")) {
+                String[] parts = entry.split(":");
+                if (parts.length == 3) {
+                    map.put(parts[0], new FakeUser(parts[1], parts[2]));
+                } else {
+                    log.warn("Invalid whiteList entry: {}", entry);
+                }
+            }
+        }
+        return map;
     }
 }

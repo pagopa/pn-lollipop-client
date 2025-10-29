@@ -1,5 +1,6 @@
 package it.pagopa.pn.lollipop.client.filter.config;
 
+import it.pagopa.pn.lollipop.client.config.LollipopProperties;
 import it.pagopa.pn.lollipop.client.config.PNHttpVerifierConfiguration;
 import it.pagopa.pn.lollipop.client.config.SpringLollipopConsumerRequestConfig;
 import it.pagopa.pn.lollipop.client.filter.LollipopWebFilter;
@@ -54,7 +55,8 @@ class PNHttpVerifierConfigurationTest {
 
     @Test
     void lollipopWebFilter() {
-        LollipopWebFilter lollipopWebFilter = pnHttpVerifierConfiguration.lollipopWebFilter(lollipopConsumerCommandBuilder);
+        LollipopProperties lollipopProperties = new LollipopProperties();
+        LollipopWebFilter lollipopWebFilter = pnHttpVerifierConfiguration.lollipopWebFilter(lollipopConsumerCommandBuilder,lollipopProperties);
         Assertions.assertNotNull(lollipopWebFilter);
     }
 
