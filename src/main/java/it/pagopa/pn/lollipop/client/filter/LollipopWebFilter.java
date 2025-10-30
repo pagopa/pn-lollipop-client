@@ -14,6 +14,7 @@ import it.pagopa.tech.lollipop.consumer.model.CommandResult;
 import it.pagopa.tech.lollipop.consumer.model.LollipopConsumerRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.web.reactive.filter.OrderedWebFilter;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -49,6 +50,9 @@ public class LollipopWebFilter implements OrderedWebFilter {
     private static final String HEADER_FIELD = "x-pagopa-pn-src-ch";
     private static final String HEADER_VALUE = "IO";
     private static final String HEADER_USER_ID = "x-pagopa-lollipop-user-id";
+    private static final String HEADER_USER_TAX_ID = "x-pagopa-cx-taxid";
+    private static final String ERROR_CODE_MISMATCH = "ERROR_MISMATCH_BETWEEN_TAXID_AND_USERID";
+    private static final String ERROR_MESSAGE_MISMATCH = "Error mismatch between x-pagopa-cx-taxid and x-pagopa-lollipop-user-id";
 
 
     public LollipopWebFilter(LollipopConsumerCommandBuilder consumerCommandBuilder, String whiteListConfig) {
@@ -73,6 +77,13 @@ public class LollipopWebFilter implements OrderedWebFilter {
             //controllo lollipop-user-id-header: se è presente nella lista settiamo dei valori fittizi al name e familyName e non viene fatta alcuna validazione
             if(headers.containsKey(HEADER_USER_ID) && headers.getFirst(HEADER_USER_ID) != null) {
                 String userId = headers.getFirst(HEADER_USER_ID);
+
+                if(headers.containsKey(HEADER_USER_TAX_ID)) {
+                    String taxId = headers.getFirst(HEADER_USER_TAX_ID);
+                    if (taxId != null && !taxId.equalsIgnoreCase(userId)) {
+                       return checkHeadersMatch(exchange);
+                    }
+                }
                 if(whiteList.containsKey(userId)) {
                     log.info("In Lollipop filter - Lollipop userId is not null {}", userId);
                     FakeUser fakeUser = whiteList.get(userId);
@@ -116,6 +127,17 @@ public class LollipopWebFilter implements OrderedWebFilter {
         return chain.filter(exchange);
     }
 
+    //metodo che fa il controllo sul match tra x-pagopa-lollipop-user-id e x-pagopa-cx-taxid -> se non c'è match ritorna una response badRequest e un problem json
+    private Mono<Void> checkHeadersMatch(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+        log.warn("Lollipop auth response={}, detail={}", ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
+        CommandResult result = new CommandResult(ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
+        byte[] problemJsonBytes = getProblemJsonInBytes(result);
+        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
+    }
+
     private Mono<ServerWebExchange> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
         MultiValueMap<String, String> queryParams = request.getQueryParams();
         Map<String, String[]> requestParams = new HashMap<>();
@@ -137,7 +159,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             log.warn("Lollipop auth response={}, detail={}", commandResult.getResultCode(), commandResult.getResultMessage());
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
-            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
             return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
         }
 
@@ -164,6 +186,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
         ProblemError problemError = new ProblemError()
                 .code(commandResult.getResultCode())
                 .detail(commandResult.getResultMessage());
+
 
         Problem problem = new Problem()
                 .timestamp(Instant.now().atOffset(ZoneOffset.UTC))
