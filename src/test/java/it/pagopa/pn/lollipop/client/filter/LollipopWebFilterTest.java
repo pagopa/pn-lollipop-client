@@ -53,6 +53,7 @@ class LollipopWebFilterTest {
     private static final String HEADER_VALUE_FAMILY_NAME = "Rossi";
     private static final String HEADER_VALUE_NAME = "Paolo";
     private static final String HEADER_USER_ID = "x-pagopa-lollipop-user-id";
+    private static final String HEADER_USER_TAX_ID = "x-pagopa-cx-taxid";
     private static final String HEADER_USER_ID_VALUE = "fe09520f-fa96-43ad-96b5-d46924c21b73";
 
 
@@ -316,7 +317,7 @@ class LollipopWebFilterTest {
         MockServerHttpResponse response = exchange.getResponse();
 
         Assertions.assertEquals(400, response.getStatusCode().value());
-        Assertions.assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
+        Assertions.assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
 
         String problemJson = response.getBodyAsString().block();
         System.out.println("Problem JSON:\n" + problemJson);
@@ -334,6 +335,71 @@ class LollipopWebFilterTest {
         Assertions.assertFalse(errors.isEmpty(), "La lista errors non deve essere vuota");
         Assertions.assertEquals("UNSUCCESSFUL_CODE", errors.get(0).get("code").asText());
         Assertions.assertEquals("request validation error", errors.get(0).get("detail").asText());
+    }
+
+    @Test
+    void testFilterWithInvalidTaxIdHeaders() throws JsonProcessingException {
+        MockServerHttpRequest request = MockServerHttpRequest.get("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_USER_ID, "CCC")
+                .header(HEADER_USER_TAX_ID, "CCCD")
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        WebHandler webHandler = serverWebExchange -> Mono.empty();
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        webFilter.filter(exchange, filterChain).block();
+
+        MockServerHttpResponse response = exchange.getResponse();
+
+        Assertions.assertEquals(400, response.getStatusCode().value());
+        Assertions.assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
+
+        String problemJson = response.getBodyAsString().block();
+        System.out.println("Problem JSON:\n" + problemJson);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(problemJson);
+        JsonNode errors = root.get("errors");
+
+        Assertions.assertNotNull(problemJson);
+        Assertions.assertEquals(400, root.get("status").asInt());
+        Assertions.assertEquals("PN_LOLLIPOP_AUTH", root.get("title").asText());
+        Assertions.assertEquals("ERROR_MISMATCH_BETWEEN_TAXID_AND_USERID", root.get("detail").asText());
+
+        Assertions.assertTrue(errors.isArray());
+        Assertions.assertFalse(errors.isEmpty(), "La lista errors non deve essere vuota");
+        Assertions.assertEquals("ERROR_MISMATCH_BETWEEN_TAXID_AND_USERID", errors.get(0).get("code").asText());
+        Assertions.assertEquals("Error mismatch between x-pagopa-cx-taxid and x-pagopa-lollipop-user-id", errors.get(0).get("detail").asText());
+
+    }
+
+    @Test
+    void testFilterWithTaxIdHeadersOk() throws JsonProcessingException {
+        MockServerHttpRequest request = MockServerHttpRequest.get("http://localhost")
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .header(HEADER_USER_ID, "CCC")
+                .header(HEADER_USER_TAX_ID, "CCC")
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        WebHandler webHandler = serverWebExchange -> Mono.empty();
+
+        CommandResult commandResult =
+                new CommandResult(VERIFICATION_SUCCESS_CODE, "request validation success");
+
+        Mockito.when(commandBuilder.createCommand(Mockito.any(LollipopConsumerRequest.class))).thenReturn(command);
+
+        Mockito.when(command.doExecute()).thenReturn( commandResult );
+
+        WebFilterChain filterChain = new DefaultWebFilterChain(webHandler, Collections.emptyList());
+
+        webFilter.filter(exchange, filterChain).block();
+        assertDoesNotThrow( () -> {
+            webFilter.filter(exchange, filterChain).block();
+        });
     }
 
 
