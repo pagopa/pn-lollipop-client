@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.web.reactive.filter.OrderedWebFilter;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -103,28 +104,31 @@ public class LollipopWebFilter implements OrderedWebFilter {
                 }
             }
             // Get request body as String
-            if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
-                return DataBufferUtils.join(request.getBody())
-                        .map(dataBuffer ->
-                        {
-                            byte[] bytes = new byte[dataBuffer.readableByteCount()];
-                            dataBuffer.read(bytes);
-                       //     DataBufferUtils.release(dataBuffer);
-                            return new String(bytes, StandardCharsets.UTF_8);
-                        })
-                        .defaultIfEmpty("")
-                        .flatMap(reqBody ->
-                                validateRequest(exchange, request, reqBody)
-                                        .flatMap(chain::filter)
-                                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                                        .switchIfEmpty(chain.filter(exchange)) // <── solo se valida, continua la chain
-                        );
-            } else {
+            //TODO
+//            if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
+//                return DataBufferUtils.join(request.getBody())
+//                        .map(dataBuffer ->
+//                        {
+//                            ByteBuffer byteBuffer = dataBuffer.asByteBuffer();
+//                            // byte[] bytes = new byte[dataBuffer.readableByteCount()];
+//                            //dataBuffer.read(bytes);
+//                            //     DataBufferUtils.release(dataBuffer); //-> da verificare se è questo il problema
+//                            return StandardCharsets.UTF_8.decode(byteBuffer).toString();
+//                            // return new String(bytes, StandardCharsets.UTF_8);
+//                        })
+//                        .defaultIfEmpty("")
+//                        .flatMap(reqBody ->
+//                                validateRequest(exchange, request, reqBody)
+//                                        .flatMap(chain::filter)
+//                                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
+//                                        .switchIfEmpty(chain.filter(exchange)) // <── solo se valida, continua la chain
+//                        );
+//            } else {
                 return validateRequest(exchange, request, null)
                         .flatMap(chain::filter)
                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
                         .switchIfEmpty(chain.filter(exchange)); // <── idem
-            }
+
         }
         return chain.filter(exchange);
     }
@@ -170,6 +174,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
         if (name == null || name.isEmpty() || familyName == null || familyName.isEmpty()) {
             log.warn("Lollipop header name or familyName is null or empty");
         }
+
         ServerHttpRequest mutatedRequest = exchange.getRequest()
                 .mutate()
                 .header("x-pagopa-lollipop-user-name", name)
@@ -225,4 +230,5 @@ public class LollipopWebFilter implements OrderedWebFilter {
         }
         return map;
     }
+
 }
