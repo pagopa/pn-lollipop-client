@@ -30,6 +30,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -104,10 +105,11 @@ public class LollipopWebFilter implements OrderedWebFilter {
             // Get request body as String
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
                 return DataBufferUtils.join(request.getBody())
-                        .map(dataBuffer -> {
+                        .map(dataBuffer ->
+                        {
                             byte[] bytes = new byte[dataBuffer.readableByteCount()];
                             dataBuffer.read(bytes);
-                            DataBufferUtils.release(dataBuffer);
+                       //     DataBufferUtils.release(dataBuffer);
                             return new String(bytes, StandardCharsets.UTF_8);
                         })
                         .defaultIfEmpty("")
@@ -169,6 +171,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             log.warn("Lollipop header name or familyName is null or empty");
         }
 
+        exchange.getRequest().getBody();
         ServerHttpRequest mutatedRequest = exchange.getRequest()
                 .mutate()
                 .header("x-pagopa-lollipop-user-name", name)
