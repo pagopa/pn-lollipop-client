@@ -170,8 +170,6 @@ public class LollipopWebFilter implements OrderedWebFilter {
         if (name == null || name.isEmpty() || familyName == null || familyName.isEmpty()) {
             log.warn("Lollipop header name or familyName is null or empty");
         }
-
-        exchange.getRequest().getBody();
         ServerHttpRequest mutatedRequest = exchange.getRequest()
                 .mutate()
                 .header("x-pagopa-lollipop-user-name", name)
