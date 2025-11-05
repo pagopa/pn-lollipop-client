@@ -137,7 +137,8 @@ class LollipopWebFilterTest {
     @Test
     void testFilterWithValidPostRequest() {
         MockServerHttpRequest request = MockServerHttpRequest.post("http://localhost")
-                .header(HEADER_FIELD, HEADER_VALUE).build();
+                .header(HEADER_FIELD, HEADER_VALUE)
+                .body("{\"example\":\"body\"}");
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
         WebHandler webHandler = serverWebExchange -> {
@@ -166,7 +167,7 @@ class LollipopWebFilterTest {
                 .header(HEADER_FIELD, HEADER_VALUE)
                 .header(HEADER_FIELD_NAME, HEADER_VALUE_NAME)
                 .header(HEADER_FIELD_FAMILY_NAME, HEADER_VALUE_FAMILY_NAME)
-                .build();
+                .body("{\"example\":\"body\"}");
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
         WebHandler webHandler = serverWebExchange -> {
@@ -242,7 +243,7 @@ class LollipopWebFilterTest {
                 .header(HEADER_FIELD, HEADER_VALUE)
                 .header(HEADER_FIELD_NAME, "")
                 .header(HEADER_FIELD_FAMILY_NAME, "")
-                .build();
+                .body("{\"example\":\"body\"}");
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
         WebHandler webHandler = serverWebExchange -> {
@@ -271,7 +272,7 @@ class LollipopWebFilterTest {
                 .header(HEADER_FIELD, HEADER_VALUE)
                 .header(HEADER_FIELD_NAME, "")
                 .header(HEADER_FIELD_FAMILY_NAME, "")
-                .build();
+                .body("{\"example\":\"body\"}");
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
         WebHandler webHandler = serverWebExchange -> {
