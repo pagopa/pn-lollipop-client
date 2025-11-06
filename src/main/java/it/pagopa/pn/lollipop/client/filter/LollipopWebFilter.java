@@ -25,6 +25,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
@@ -105,30 +106,47 @@ public class LollipopWebFilter implements OrderedWebFilter {
             }
             // Get request body as String
             //TODO
-//            if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
-//                return DataBufferUtils.join(request.getBody())
-//                        .map(dataBuffer ->
-//                        {
-//                            ByteBuffer byteBuffer = dataBuffer.asByteBuffer();
-//                            // byte[] bytes = new byte[dataBuffer.readableByteCount()];
-//                            //dataBuffer.read(bytes);
-//                            //     DataBufferUtils.release(dataBuffer); //-> da verificare se è questo il problema
-//                            return StandardCharsets.UTF_8.decode(byteBuffer).toString();
-//                            // return new String(bytes, StandardCharsets.UTF_8);
-//                        })
-//                        .defaultIfEmpty("")
-//                        .flatMap(reqBody ->
-//                                validateRequest(exchange, request, reqBody)
-//                                        .flatMap(chain::filter)
-//                                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
-//                                        .switchIfEmpty(chain.filter(exchange)) // <── solo se valida, continua la chain
-//                        );
-//            } else {
+            if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
+               Mono<DataBuffer> dataBufferMono=  DataBufferUtils.join(request.getBody());
+                return dataBufferMono
+                        .flatMap(dataBuffer -> {
+                            // copia i byte in memoria
+                            byte[] bodyBytes = new byte[dataBuffer.readableByteCount()];
+                            dataBuffer.read(bodyBytes);
+                            DataBufferUtils.release(dataBuffer);
+
+                            String bodyString = new String(bodyBytes, StandardCharsets.UTF_8);
+                            log.debug("Body ricevuto nel filtro: {}", bodyString);
+
+                            // ricrea un nuovo DataBuffer da riutilizzare nel flusso
+                            DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
+                            Flux<DataBuffer> cachedBodyFlux = Flux.defer(() -> {
+                                DataBuffer newBuffer = bufferFactory.wrap(bodyBytes);
+                                return Flux.just(newBuffer);
+                            });
+
+                            // decora la request sostituendo il body con quello appena ricreato
+                            ServerHttpRequest mutatedRequest = new ServerHttpRequestDecorator(request) {
+                                @Override
+                                public Flux<DataBuffer> getBody() {
+                                    return cachedBodyFlux;
+                                }
+                            };
+
+                            // crea un nuovo exchange con la request decorata
+                            ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedRequest).build();
+
+                            return validateRequest(mutatedExchange, request, bodyString)
+                                    .flatMap(chain::filter)
+                                    .doOnNext(objects -> log.debug("After Lollipop Filter"))
+                                    .switchIfEmpty(chain.filter(mutatedExchange));
+                        });
+            } else {
                 return validateRequest(exchange, request, null)
                         .flatMap(chain::filter)
                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
                         .switchIfEmpty(chain.filter(exchange)); // <── idem
-
+            }
         }
         return chain.filter(exchange);
     }
