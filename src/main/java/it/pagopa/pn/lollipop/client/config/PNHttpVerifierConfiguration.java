@@ -24,6 +24,7 @@ import it.pagopa.tech.lollipop.consumer.logger.LollipopLoggerServiceFactory;
 import it.pagopa.tech.lollipop.consumer.logger.impl.LollipopLogbackLoggerServiceFactory;
 import it.pagopa.tech.lollipop.consumer.service.LollipopConsumerRequestValidationService;
 import it.pagopa.tech.lollipop.consumer.service.impl.LollipopConsumerRequestValidationServiceImpl;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
@@ -36,8 +37,8 @@ public class PNHttpVerifierConfiguration {
 
     @Bean
     public LollipopWebFilter lollipopWebFilter(
-            LollipopConsumerCommandBuilder lollipopConsumerCommandBuilder) {
-        return new LollipopWebFilter(lollipopConsumerCommandBuilder);
+            LollipopConsumerCommandBuilder lollipopConsumerCommandBuilder, LollipopProperties lollipopProperties) {
+        return new LollipopWebFilter(lollipopConsumerCommandBuilder, lollipopProperties.getWhiteList());
     }
 
     @Bean
