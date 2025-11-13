@@ -69,28 +69,32 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
     @Override
     public @NotNull Mono<Void> filter(@NotNull ServerWebExchange exchange, @NotNull WebFilterChain chain) {
+        log.info("LollipopWebFilter - start filter()");
         ServerHttpRequest request = exchange.getRequest();
         HttpHeaders headers = exchange.getRequest().getHeaders();
 
         if (headers.containsKey(HEADER_FIELD)
                 && Objects.equals(headers.getFirst(HEADER_FIELD), HEADER_VALUE)) {
-
+            log.info("LollipopWebFilter - starting checking headers");
             log.debug("Before Lollipop filter");
             HttpMethod method = request.getMethod();
             //controllo lollipop-user-id-header: se è presente nella lista settiamo dei valori fittizi al name e familyName e non viene fatta alcuna validazione
             if(headers.containsKey(HEADER_USER_ID) && headers.getFirst(HEADER_USER_ID) != null) {
+                log.info("LollipopWebFilter - x-pagopa-lollipop-user-id header found");
                 String userId = headers.getFirst(HEADER_USER_ID);
 
                 if(headers.containsKey(HEADER_USER_TAX_ID)) {
+                    log.info("LollipopWebFilter - x-pagopa-cx-taxid header found");
                     String taxId = headers.getFirst(HEADER_USER_TAX_ID);
                     if (taxId != null && !taxId.equalsIgnoreCase(userId)) {
                        return checkHeadersMatch(exchange);
                     }
+                    log.info("LollipopWebFilter - taxid and userId are the same, proceeding...");
                 }
                 if(whiteList.containsKey(userId)) {
-                    log.info("In Lollipop filter - Lollipop userId is not null {}", userId);
+                    log.info("In Lollipop filter - Lollipop userId is not null");
                     FakeUser fakeUser = whiteList.get(userId);
-                    log.debug("In Lollipop filter - White list user detected: {}", userId);
+                    log.debug("In Lollipop filter - White list user detected");
 
                     ServerHttpRequest mutatedRequest = request.mutate()
                             .header("x-pagopa-lollipop-user-name", fakeUser.name())
@@ -101,12 +105,14 @@ public class LollipopWebFilter implements OrderedWebFilter {
                             .request(mutatedRequest)
                             .build();
 
+                    log.debug("Ending Lollipop filter - Before return filter: set fake user, mutated the exchange and skipping validation");
                     return chain.filter(mutatedExchange);
                 }
             }
             // Get request body as String
             //TODO
             if (method != HttpMethod.GET && method != HttpMethod.DELETE) {
+                log.info("LollipopWebFilter - method is not a POST");
                 return DataBufferUtils.join(request.getBody())
                         .flatMap(dataBuffer -> {
                             // copia i byte in memoria
@@ -115,12 +121,12 @@ public class LollipopWebFilter implements OrderedWebFilter {
                             DataBufferUtils.release(dataBuffer);
 
                             String bodyString = new String(bodyBytes, StandardCharsets.UTF_8);
-                            log.debug("Body ricevuto nel filtro: {}", bodyString);
 
                             // ricrea un nuovo DataBuffer da riutilizzare nel flusso
                             DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
                             Flux<DataBuffer> cachedBodyFlux = Flux.defer(() -> {
                                 DataBuffer newBuffer = bufferFactory.wrap(bodyBytes);
+                                log.info("LollipopWebFilter before return new buffer body. Is empty= {}", bodyString.isEmpty());
                                 return Flux.just(newBuffer);
                             });
 
@@ -132,36 +138,43 @@ public class LollipopWebFilter implements OrderedWebFilter {
                                 }
                             };
 
+                            log.info("LollipopWebFilter after decoreted body");
                             // crea un nuovo exchange con la request decorata
                             ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedRequest).build();
 
+                            log.info("LollipopWebFilter after mutatedExchange and before validateRequest");
                             return validateRequest(mutatedExchange, request, bodyString)
                                     .flatMap(chain::filter)
                                     .doOnNext(objects -> log.debug("After Lollipop Filter"))
                                     .switchIfEmpty(chain.filter(mutatedExchange));
                         });
             } else {
+                log.info("LollipopWebFilter - before validateRequest()");
                 return validateRequest(exchange, request, null)
                         .flatMap(chain::filter)
                         .doOnNext(objects -> log.debug("After Lollipop Filter"))
                         .switchIfEmpty(chain.filter(exchange)); // <── idem
             }
         }
+        log.info("LollipopWebFilter - End filter()");
         return chain.filter(exchange);
     }
 
     //metodo che fa il controllo sul match tra x-pagopa-lollipop-user-id e x-pagopa-cx-taxid -> se non c'è match ritorna una response badRequest e un problem json
     private Mono<Void> checkHeadersMatch(ServerWebExchange exchange) {
+        log.info("LollipopWebFilter - Start checkHeadersMatch");
         exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
         log.warn("Lollipop auth response={}, detail={}", ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
         CommandResult result = new CommandResult(ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
         byte[] problemJsonBytes = getProblemJsonInBytes(result);
         DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        log.info("LollipopWebFilter - checkHeadersMatch ended, proceeding to return exchange response");
         return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
     }
 
     private Mono<ServerWebExchange> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
+        log.info("LollipopWebFilter - Start validateRequest()");
         MultiValueMap<String, String> queryParams = request.getQueryParams();
         Map<String, String[]> requestParams = new HashMap<>();
         queryParams.forEach((key, values) -> requestParams.put(key, values.toArray(new String[0])));
@@ -176,6 +189,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
         LollipopConsumerCommand command = consumerCommandBuilder.createCommand(consumerRequest);
         CommandResult commandResult = command.doExecute();
+        log.info("LollipopWebFilter - after SDK command={}", commandResult.getResultCode());
 
         if (!commandResult.getResultCode().equals(VERIFICATION_SUCCESS_CODE)) {
             exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
@@ -183,6 +197,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            log.info("LollipopWebFilter - after SDK command. Result is failure: created response ProblemJson and proceeding to write response");
             return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
         }
 
@@ -201,6 +216,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(mutatedRequest)
                 .build();
+        log.info("LollipopWebFilter - End validateRequest() - after mutatedExchange and before return mutatedExchange");
 
         return Mono.just(mutatedExchange);
     }
