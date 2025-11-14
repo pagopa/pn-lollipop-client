@@ -135,21 +135,27 @@ public class LollipopWebFilter implements OrderedWebFilter {
                             // crea un nuovo exchange con la request decorata
                             ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedRequest).build();
 
+                            log.info("In Lollipop filter - POST: before validateRequest");
                             return validateRequest(mutatedExchange, request, bodyString)
                                     .flatMap(response -> {
                                         if (response != null) {
+                                            log.info("In Lollipop filter - POST: into if response != null, proceeding return response");
                                             return chain.filter(response);
                                         } else {
+                                            log.info("In Lollipop filter - POST: into else response == null, proceeding return exchange");
                                             return chain.filter(exchange);
                                         }
                                     }).doOnNext(objects -> log.debug("After Lollipop Filter"));
                         });
             } else {
+                log.info("In Lollipop filter - GET: before validateRequest");
                 return validateRequest(exchange, request, null)
                         .flatMap(response -> {
                             if (response != null) {
+                                log.info("In Lollipop filter - GET: into if response != null, proceeding return response");
                                 return chain.filter(response);
                             } else {
+                                log.info("In Lollipop filter - GET: into else response == null, proceeding return exchange");
                                 return chain.filter(exchange);
                             }
                         }).doOnNext(objects -> log.debug("After Lollipop Filter"));
