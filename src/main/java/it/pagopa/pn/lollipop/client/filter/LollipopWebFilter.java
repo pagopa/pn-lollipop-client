@@ -14,7 +14,6 @@ import it.pagopa.tech.lollipop.consumer.model.CommandResult;
 import it.pagopa.tech.lollipop.consumer.model.LollipopConsumerRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.web.reactive.filter.OrderedWebFilter;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -32,7 +31,6 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -119,46 +117,26 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
                             // ricrea un nuovo DataBuffer da riutilizzare nel flusso
                             DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
-                            Flux<DataBuffer> cachedBodyFlux = Flux.defer(() -> {
-                                DataBuffer newBuffer = bufferFactory.wrap(bodyBytes);
-                                return Flux.just(newBuffer);
-                            });
 
                             // decora la request sostituendo il body con quello appena ricreato
                             ServerHttpRequest mutatedRequest = new ServerHttpRequestDecorator(request) {
                                 @Override
                                 public Flux<DataBuffer> getBody() {
-                                    return cachedBodyFlux;
+                                    return  Flux.just( bufferFactory.wrap(bodyBytes));
                                 }
                             };
 
                             // crea un nuovo exchange con la request decorata
                             ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedRequest).build();
 
-                            log.info("In Lollipop filter - POST: before validateRequest");
                             return validateRequest(mutatedExchange, request, bodyString)
-                                    .flatMap(response -> {
-                                        if (response != null) {
-                                            log.info("In Lollipop filter - POST: into if response != null, proceeding return response");
-                                            return chain.filter(response);
-                                        } else {
-                                            log.info("In Lollipop filter - POST: into else response == null, proceeding return exchange");
-                                            return chain.filter(exchange);
-                                        }
-                                    }).doOnNext(objects -> log.debug("After Lollipop Filter"));
+                                    .flatMap(chain::filter)
+                                    .doOnTerminate(() ->  log.debug("After Lollipop Filter"));
                         });
             } else {
-                log.info("In Lollipop filter - GET: before validateRequest");
                 return validateRequest(exchange, request, null)
-                        .flatMap(response -> {
-                            if (response != null) {
-                                log.info("In Lollipop filter - GET: into if response != null, proceeding return response");
-                                return chain.filter(response);
-                            } else {
-                                log.info("In Lollipop filter - GET: into else response == null, proceeding return exchange");
-                                return chain.filter(exchange);
-                            }
-                        }).doOnNext(objects -> log.debug("After Lollipop Filter"));
+                        .flatMap(chain::filter)
+                        .doOnTerminate(() -> log.debug("After Lollipop Filter"));
             }
         }
         return chain.filter(exchange);
@@ -197,7 +175,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
-            return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
+            return exchange.getResponse().writeWith(Mono.just(buffer)).thenReturn(exchange);
         }
 
         String name = commandResult.getName();
