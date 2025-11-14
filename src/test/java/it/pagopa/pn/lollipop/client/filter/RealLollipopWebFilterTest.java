@@ -9,6 +9,7 @@ import it.pagopa.tech.lollipop.consumer.assertion.AssertionServiceFactory;
 import it.pagopa.tech.lollipop.consumer.assertion.client.AssertionClient;
 import it.pagopa.tech.lollipop.consumer.model.SamlAssertion;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -45,6 +46,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 
+@Disabled("test da fare solo in locale con dati reali")
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = {PNHttpVerifierConfiguration.class, RealLollipopWebFilterTest.TestConfig.class})
 @TestPropertySource("classpath:application-test.properties")
