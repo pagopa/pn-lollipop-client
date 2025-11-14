@@ -175,7 +175,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
             DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
             exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
-            return exchange.getResponse().writeWith(Mono.just(buffer)).thenReturn(exchange);
+            return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
         }
 
         String name = commandResult.getName();
