@@ -136,15 +136,23 @@ public class LollipopWebFilter implements OrderedWebFilter {
                             ServerWebExchange mutatedExchange = exchange.mutate().request(mutatedRequest).build();
 
                             return validateRequest(mutatedExchange, request, bodyString)
-                                    .flatMap(chain::filter)
-                                    .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                                    .switchIfEmpty(chain.filter(mutatedExchange));
+                                    .flatMap(response -> {
+                                        if (response != null) {
+                                            return chain.filter(response);
+                                        } else {
+                                            return chain.filter(exchange);
+                                        }
+                                    }).doOnNext(objects -> log.debug("After Lollipop Filter"));
                         });
             } else {
                 return validateRequest(exchange, request, null)
-                        .flatMap(chain::filter)
-                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                        .switchIfEmpty(chain.filter(exchange)); // <── idem
+                        .flatMap(response -> {
+                            if (response != null) {
+                                return chain.filter(response);
+                            } else {
+                                return chain.filter(exchange);
+                            }
+                        }).doOnNext(objects -> log.debug("After Lollipop Filter"));
             }
         }
         return chain.filter(exchange);
