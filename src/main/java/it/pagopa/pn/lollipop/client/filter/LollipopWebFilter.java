@@ -14,7 +14,6 @@ import it.pagopa.tech.lollipop.consumer.model.CommandResult;
 import it.pagopa.tech.lollipop.consumer.model.LollipopConsumerRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.web.reactive.filter.OrderedWebFilter;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -32,7 +31,6 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -119,16 +117,12 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
                             // ricrea un nuovo DataBuffer da riutilizzare nel flusso
                             DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
-                            Flux<DataBuffer> cachedBodyFlux = Flux.defer(() -> {
-                                DataBuffer newBuffer = bufferFactory.wrap(bodyBytes);
-                                return Flux.just(newBuffer);
-                            });
 
                             // decora la request sostituendo il body con quello appena ricreato
                             ServerHttpRequest mutatedRequest = new ServerHttpRequestDecorator(request) {
                                 @Override
                                 public Flux<DataBuffer> getBody() {
-                                    return cachedBodyFlux;
+                                    return  Flux.just( bufferFactory.wrap(bodyBytes));
                                 }
                             };
 
@@ -137,14 +131,12 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
                             return validateRequest(mutatedExchange, request, bodyString)
                                     .flatMap(chain::filter)
-                                    .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                                    .switchIfEmpty(chain.filter(mutatedExchange));
+                                    .doOnTerminate(() ->  log.debug("After Lollipop Filter"));
                         });
             } else {
                 return validateRequest(exchange, request, null)
                         .flatMap(chain::filter)
-                        .doOnNext(objects -> log.debug("After Lollipop Filter"))
-                        .switchIfEmpty(chain.filter(exchange)); // <── idem
+                        .doOnTerminate(() -> log.debug("After Lollipop Filter"));
             }
         }
         return chain.filter(exchange);
