@@ -86,9 +86,9 @@ public class LollipopWebFilter implements OrderedWebFilter {
                     }
                 }
                 if(whiteList.containsKey(userId)) {
-                    log.info("In Lollipop filter - Lollipop userId is not null {}", userId);
+                    log.info("In Lollipop filter - Lollipop userId is not null");
                     FakeUser fakeUser = whiteList.get(userId);
-                    log.debug("In Lollipop filter - White list user detected: {}", userId);
+                    log.debug("In Lollipop filter - White list user detected");
 
                     ServerHttpRequest mutatedRequest = request.mutate()
                             .header("x-pagopa-lollipop-user-name", fakeUser.name())
