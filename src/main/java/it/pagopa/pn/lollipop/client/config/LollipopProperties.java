@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.util.ResourceUtils;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 @Configuration
 @PropertySource(ResourceUtils.CLASSPATH_URL_PREFIX + "application-lollipop.properties") //can be overridden by application.properties
