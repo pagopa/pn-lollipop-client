@@ -25,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
@@ -144,13 +145,15 @@ public class LollipopWebFilter implements OrderedWebFilter {
 
     //metodo che fa il controllo sul match tra x-pagopa-lollipop-user-id e x-pagopa-cx-taxid -> se non c'è match ritorna una response badRequest e un problem json
     private Mono<Void> checkHeadersMatch(ServerWebExchange exchange) {
-        exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
         log.warn("Lollipop auth response={}, detail={}", ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
+
+        ServerHttpResponse response = exchange.getResponse();
+        response.getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        response.setStatusCode(HttpStatus.BAD_REQUEST);
         CommandResult result = new CommandResult(ERROR_CODE_MISMATCH, ERROR_MESSAGE_MISMATCH);
         byte[] problemJsonBytes = getProblemJsonInBytes(result);
-        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
-        return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
+        DataBuffer buffer = response.bufferFactory().wrap(problemJsonBytes);
+        return response.writeWith(Mono.just(buffer)); //.then(Mono.empty());
     }
 
     private Mono<ServerWebExchange> validateRequest(@NotNull ServerWebExchange exchange, ServerHttpRequest request, String requestBody) {
@@ -175,12 +178,13 @@ public class LollipopWebFilter implements OrderedWebFilter {
             log.warn("Tracciatura eventi di validazione incongruenti - resultLollipopAuthorizer: {}, - resultCodeLollipopClient: {}" ,resultLollipopAuthorizer, resultCodeLollipopClient);
 
         if (!commandResult.getResultCode().equals(VERIFICATION_SUCCESS_CODE)) {
-            exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
             log.warn("Lollipop auth response={}, detail={}", commandResult.getResultCode(), commandResult.getResultMessage());
+            ServerHttpResponse response = exchange.getResponse();
+            response.getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            response.setStatusCode(HttpStatus.BAD_REQUEST);
             byte[] problemJsonBytes = getProblemJsonInBytes(commandResult);
-            DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(problemJsonBytes);
-            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_PROBLEM_JSON);
-            return exchange.getResponse().writeWith(Mono.just(buffer)).then(Mono.empty());
+            DataBuffer buffer = response.bufferFactory().wrap(problemJsonBytes);
+            return response.writeWith(Mono.just(buffer)).then(Mono.<ServerWebExchange>empty());
         }
 
         String name = commandResult.getName();
