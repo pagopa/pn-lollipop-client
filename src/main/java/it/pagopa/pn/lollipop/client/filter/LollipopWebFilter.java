@@ -172,7 +172,7 @@ public class LollipopWebFilter implements OrderedWebFilter {
         LollipopConsumerCommand command = consumerCommandBuilder.createCommand(consumerRequest);
         CommandResult commandResult = command.doExecute();
 
-        String resultLollipopAuthorizer = headerParams.get("x-authorizer-result-code");
+        String resultLollipopAuthorizer = headerParams.get("x-pagopa-pn-result-code");
         String resultCodeLollipopClient = commandResult.getResultCode();
         if(resultLollipopAuthorizer != null && resultCodeLollipopClient != null && !resultLollipopAuthorizer.equalsIgnoreCase(resultCodeLollipopClient))
             log.warn("Tracciatura eventi di validazione incongruenti - resultLollipopAuthorizer: {}, - resultCodeLollipopClient: {}" ,resultLollipopAuthorizer, resultCodeLollipopClient);
